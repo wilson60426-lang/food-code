@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QC-010 高級溯源管理系統</title>
+    <!-- Bootstrap 5 & FontAwesome -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Animate.css 用於動態效果 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            --glass-bg: rgba(255, 255, 255, 0.95);
+        }
+
+        body { 
+            background: #f0f2f5; 
+            font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif; 
+            height: 100vh; 
+            overflow: hidden; 
+            display: flex; 
+            flex-direction: column; 
+        }
+
+        /* 導航列動態背景 */
+        .navbar { 
+            background: var(--primary-gradient); 
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            color: white; 
+            padding: 1rem 2rem; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .main-layout { flex: 1; display: flex; overflow: hidden; padding: 20px; gap: 20px; }
+
+        /* 左側側邊欄 */
+        .sidebar { 
+            width: 400px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 15px; 
+            animation: fadeInLeft 0.8s;
+        }
+
+        .search-card {
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        }
+
+        .list-container {
+            flex: 1;
+            background: white;
+            border-radius: 16px;
+            overflow-y: auto;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        /* 右側詳情區 */
+        .detail-view {
+            flex: 1;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            animation: fadeInRight 0.8s;
+            position: relative;
+        }
+
+        /* 追溯圖容器 */
+        #mermaidWrapper {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #fafafa;
+            border-radius: 12px;
+            margin: 20px;
+            border: 1px dashed #ddd;
+            overflow: auto;
+        }
+
+        /* 語音按鈕效果 */
+        .voice-btn {
+            width: 50px; height: 50px; border-radius: 50%; border: none;
+            background: #ff4b2b; color: white; transition: 0.3s;
+            box-shadow: 0 4px 15px rgba(255, 75, 43, 0.3);
+        }
+        .voice-btn.listening {
+            animation: pulse 1s infinite;
+            background: #ff0000;
+        }
+
+        .batch-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .batch-item:hover { 
+            background: #f8f9ff; 
+            transform: scale(1.02);
+            padding-left: 25px;
+        }
+        .batch-item.active {
+            background: #eef2ff;
+            border-left: 5px solid #4e73df;
+        }
+
+        .example-pill {
+            font-size: 12px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            background: #f1f3f5;
+            color: #495057;
+            cursor: pointer;
+            margin: 2px;
+            display: inline-block;
+            transition: 0.2s;
+        }
+        .example-pill:hover { background: #4e73df; color: white; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 75, 43, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(255, 75, 43, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 75, 43, 0); }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar text-white">
+    <div class="container-fluid">
+        <span class="navbar-brand mb-0 h1"><i class="fa-solid fa-seedling me-2"></i> QC-010 食安溯源視覺化系統</span>
+        <div id="clock" class="small"></div>
+    </div>
+</nav>
+
+<div class="main-layout">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="search-card">
+            <div class="input-group mb-3 shadow-sm">
+                <input type="text" id="searchInput" class="form-control border-0" style="padding: 12px;" placeholder="搜尋品項或批號...">
+                <button class="btn btn-white bg-white text-primary border-0" id="searchBtn"><i class="fa-solid fa-search"></i></button>
+            </div>
+            
+            <div class="d-flex align-items-center gap-3 mb-2">
+                <button id="voiceBtn" class="voice-btn"><i class="fa-solid fa-microphone"></i></button>
+                <div class="small">
+                    <div class="text-muted">快速點選：</div>
+                    <div id="exampleList">
+                        <span class="example-pill" onclick="quick('沙拉醬')">沙拉醬</span>
+                        <span class="example-pill" onclick="quick('冷凍水餃')">冷凍水餃</span>
+                        <span class="example-pill" onclick="quick('氣泡飲')">氣泡飲</span>
+                        <span class="example-pill" onclick="quick('B1002')">B1002</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="list-container" id="resultsList">
+            <div class="p-5 text-center text-muted animate__animated animate__fadeIn">
+                <i class="fa-solid fa-box-open fa-3x mb-3 opacity-25"></i>
+                <p>請輸入或說出品項關鍵字</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="detail-view">
+        <!-- 初始歡迎畫面 -->
+        <div id="emptyState" class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+            <div class="animate__animated animate__pulse animate__infinite">
+                <i class="fa-solid fa-project-diagram fa-5x mb-4 opacity-25"></i>
+            </div>
+            <h4>等待選擇資料</h4>
+            <p>請從左側清單點擊任何批號以展開追溯視圖</p>
+        </div>
+
+        <!-- 詳細資料 -->
+        <div id="detailContent" class="h-100 flex-column d-none animate__animated animate__fadeIn">
+            <div class="p-4 border-bottom bg-white shadow-sm" style="border-radius: 16px 16px 0 0;">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h6 class="text-uppercase text-muted fw-bold mb-1">生產批號</h6>
+                        <h2 id="viewBatch" class="mb-0 text-primary fw-bold">---</h2>
+                    </div>
+                    <div class="col-auto text-end">
+                        <span id="viewItem" class="badge bg-dark fs-5 px-3 py-2">---</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 flex-grow-1 overflow-auto">
+                <div class="row g-4 mb-4">
+                    <div class="col-md-4">
+                        <div class="card border-0 bg-light p-3">
+                            <small class="text-muted"><i class="fa-solid fa-fingerprint me-1"></i> 原料批號</small>
+                            <div id="viewMat" class="h5 fw-bold mb-0 mt-1">---</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-0 bg-light p-3">
+                            <small class="text-muted"><i class="fa-solid fa-calendar-day me-1"></i> 生產日期</small>
+                            <div id="viewDate" class="h5 fw-bold mb-0 mt-1">---</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-0 bg-light p-3">
+                            <small class="text-muted"><i class="fa-solid fa-truck-fast me-1"></i> 出貨流向</small>
+                            <div id="viewCust" class="h5 fw-bold mb-0 mt-1">---</div>
+                        </div>
+                    </div>
+                </div>
+
+                <h6 class="fw-bold mb-3"><i class="fa-solid fa-eye text-success me-2"></i>自動生成追溯圖</h6>
+                <div id="mermaidWrapper">
+                    <div id="mermaidGraph"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+    // 1. 初始化 Mermaid
+    mermaid.initialize({ 
+        startOnLoad: false, 
+        theme: 'neutral',
+        securityLevel: 'loose',
+        fontFamily: 'Noto Sans TC'
+    });
+
+    // 2. 核心數據 (完整嵌入)
+    const rawData = `批號,品項,原料批號,生產日期,出貨對象
+B1000,沙拉醬,BATCH1000,2026/1/1,A
+B1001,杯裝優格,B1001,2026-02-02,C
+B1002,果醬,b-1002,20260303,項目3
+b-1003,蛋捲,b-1003,4 May 2026,B
+BATCH1004,果醬,b-1004,20260505,B
+b-1005,沙拉醬,BATCH1005,2026-06-06,A
+b-1006,巧克力餅乾,BATCH1006,20260707,項目3
+BATCH1007,杯裝優格,BATCH1007,2026/8/8,項目3
+BATCH1008,泡芙,b-1008,9 Apr 2026,B
+BATCH1009,冷凍水餃,b-1009,10 May 2026,項目2
+BATCH1010,冷凍水餃,b-1010,11 Jun 2026,項目2
+b-1138,氣泡飲,b-1138,20260727,項目1`;
+
+    // 解析 CSV
+    const db = rawData.split('\n').slice(1).map(line => {
+        const [id, item, mat, date, cust] = line.split(',');
+        return { id, item, mat, date, cust };
+    });
+
+    const resultsList = document.getElementById('resultsList');
+    const searchInput = document.getElementById('searchInput');
+
+    function quick(val) {
+        searchInput.value = val;
+        search();
+    }
+
+    // 搜尋功能
+    function search() {
+        const q = searchInput.value.trim().toUpperCase();
+        if (!q) return;
+
+        const filtered = db.filter(d => 
+            d.id.toUpperCase().includes(q) || d.item.includes(q)
+        );
+
+        renderList(filtered);
+    }
+
+    function renderList(items) {
+        resultsList.innerHTML = "";
+        if (items.length === 0) {
+            resultsList.innerHTML = `<div class="p-5 text-center">查無資料</div>`;
+            return;
+        }
+
+        items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = "batch-item animate__animated animate__fadeInUp";
+            div.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <strong class="text-primary">${item.id}</strong>
+                    <span class="badge bg-light text-dark border">${item.item}</span>
+                </div>
+                <div class="small text-muted mt-1">原料: ${item.mat}</div>
+            `;
+            div.onclick = () => {
+                document.querySelectorAll('.batch-item').forEach(e => e.classList.remove('active'));
+                div.classList.add('active');
+                showDetail(item);
+            };
+            resultsList.appendChild(div);
+        });
+    }
+
+    async function showDetail(item) {
+        document.getElementById('emptyState').classList.add('d-none');
+        const content = document.getElementById('detailContent');
+        content.classList.remove('d-none');
+        
+        document.getElementById('viewBatch').innerText = item.id;
+        document.getElementById('viewItem').innerText = item.item;
+        document.getElementById('viewMat').innerText = item.mat;
+        document.getElementById('viewDate').innerText = item.date;
+        document.getElementById('viewCust').innerText = item.cust || "庫存";
+
+        // --- Mermaid 修復版：使用固定 ID 避開 Syntax Error ---
+        const graphContainer = document.getElementById('mermaidGraph');
+        graphContainer.innerHTML = ''; // 清空
+
+        // 將內容中的特殊符號過濾，確保文字安全
+        const safeId = item.id.replace(/"/g, "'");
+        const safeMat = item.mat.replace(/"/g, "'");
+        const safeItem = item.item.replace(/"/g, "'");
+        const safeCust = (item.cust || "庫存").replace(/"/g, "'");
+
+        // 核心語法修正：使用 A, B, C 作為 ID，標籤放在 ["..."] 中
+        const syntax = `
+        graph LR
+            A["原料: ${safeMat}"] --- B
+            subgraph 本批次
+                B["生產: ${safeId}<br/>(${safeItem})"]
+            end
+            B --- C["流向: ${safeCust}"]
+
+            style B fill:#4e73df,color:#fff,stroke:#2e59d9,stroke-width:4px
+            style A fill:#f6f8fa,stroke:#d1d5da
+            style C fill:#f6f8fa,stroke:#d1d5da
+        `;
+
+        try {
+            const { svg } = await mermaid.render('render' + Date.now(), syntax);
+            graphContainer.innerHTML = svg;
+        } catch (err) {
+            console.error("Mermaid 錯誤:", err);
+            graphContainer.innerHTML = `<div class="alert alert-danger">圖表語法解析錯誤，請檢查資料格式。</div>`;
+        }
+    }
+
+    // 事件綁定
+    document.getElementById('searchBtn').onclick = search;
+    searchInput.onkeyup = (e) => e.key === 'Enter' && search();
+
+    // 語音功能
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = 'zh-TW';
+    document.getElementById('voiceBtn').onclick = () => {
+        recognition.start();
+        document.getElementById('voiceBtn').classList.add('listening');
+    };
+    recognition.onresult = (e) => {
+        const text = e.results[0][0].transcript.replace(/。/g, "");
+        searchInput.value = text;
+        search();
+    };
+    recognition.onend = () => document.getElementById('voiceBtn').classList.remove('listening');
+
+    // 時鐘
+    setInterval(() => {
+        document.getElementById('clock').innerText = new Date().toLocaleString();
+    }, 1000);
+</script>
+
+</body>
+</html>
